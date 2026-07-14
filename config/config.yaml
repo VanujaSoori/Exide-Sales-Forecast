@@ -1,0 +1,15 @@
+forecast:
+  target_column: total_qty
+  group_columns:
+    - "Item Category Code"
+    - "Site/Province"
+  lag_days: 7
+
+model:
+  type: lightgbm
+  test_size: 0.2
+
+paths:
+  bronze: "bronze/sales"
+  silver: "silver/sales_clean.parquet"
+  gold: "gold/sales_features.parquet"
