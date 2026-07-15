@@ -16,9 +16,6 @@ __pycache__/
 *.parquet
 data/
 
-# Jupyter
-.ipynb_checkpoints/
-
 # MLflow local tracking (created automatically when you run training locally)
 mlruns/
 
