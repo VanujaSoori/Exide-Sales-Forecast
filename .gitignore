@@ -25,3 +25,6 @@ Thumbs.db
 
 # Editor
 .vscode/
+
+notebooks/_local_config.py
+notebooks/_local_config.ipynb
