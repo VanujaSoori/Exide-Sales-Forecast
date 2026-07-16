@@ -24,21 +24,29 @@ def fill_missing_dates(df_daily: pd.DataFrame) -> pd.DataFrame:
     return merged
 
 
-def add_time_features(df: pd.DataFrame) -> pd.DataFrame:
-    df = df.copy()
-    df["day_of_week"] = df["posting_date"].dt.dayofweek
-    df["month"] = df["posting_date"].dt.month
-    df["is_weekend"] = df["day_of_week"].isin([5, 6]).astype(int)
-    return df
+def add_time_features(df_daily: pd.DataFrame) -> pd.DataFrame:
+    df_daily = df_daily.copy()
+    df_daily["day_of_week"] = df_daily["posting_date"].dt.dayofweek
+    df_daily["month"] = df_daily["posting_date"].dt.month
+    df_daily["is_weekend"] = df_daily["day_of_week"].isin([5, 6]).astype(int)
+
+    # Month-end ramp pattern — confirmed strong signal in the data
+    df_daily["day_of_month"] = df_daily["posting_date"].dt.day
+    df_daily["days_until_month_end"] = (
+        df_daily["posting_date"] + pd.offsets.MonthEnd(0) - df_daily["posting_date"]
+    ).dt.days
+    df_daily["is_month_end"] = (df_daily["days_until_month_end"] == 0).astype(int)
+
+    return df_daily
 
 
-def add_lag_and_rolling_features(df: pd.DataFrame, lag_days: int = 7) -> pd.DataFrame:
-    df = df.sort_values("posting_date").copy()
-    df[f"lag_{lag_days}"] = df["total_units_sold"].shift(lag_days)
-    df["rolling_avg_7"] = (
-        df["total_units_sold"].shift(1).rolling(window=7, min_periods=1).mean()
+def add_lag_and_rolling_features(df_daily: pd.DataFrame, lag_days: int = 7) -> pd.DataFrame:
+    df_daily = df_daily.sort_values("posting_date").copy()
+    df_daily[f"lag_{lag_days}"] = df_daily["total_units_sold"].shift(lag_days)
+    df_daily["rolling_avg_7"] = (
+        df_daily["total_units_sold"].shift(1).rolling(window=7, min_periods=1).mean()
     )
-    return df
+    return df_daily
 
 
 def build_gold_overall(df_silver: pd.DataFrame) -> pd.DataFrame:
