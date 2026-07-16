@@ -5,6 +5,9 @@ def clean_to_silver(df: pd.DataFrame) -> pd.DataFrame:
     # Filter to battery items only
     df = df[df["itemCategoryCode"] == "BATTERY"].copy()
 
+    # Filter to EXIDE brand only
+    df = df[df["brandCode"] == "EXIDE"].copy()
+
     # quantity: negative = sale, e.g. -2 means 2 units sold
     df["units_sold"] = df["quantity"].abs()
 
