@@ -42,10 +42,17 @@ def add_time_features(df_daily: pd.DataFrame) -> pd.DataFrame:
 
 def add_lag_and_rolling_features(df_daily: pd.DataFrame, lag_days: int = 7) -> pd.DataFrame:
     df_daily = df_daily.sort_values("posting_date").copy()
+
     df_daily[f"lag_{lag_days}"] = df_daily["total_units_sold"].shift(lag_days)
+    df_daily["lag_30"] = df_daily["total_units_sold"].shift(30)
+
     df_daily["rolling_avg_7"] = (
         df_daily["total_units_sold"].shift(1).rolling(window=7, min_periods=1).mean()
     )
+    df_daily["rolling_avg_30"] = (
+        df_daily["total_units_sold"].shift(1).rolling(window=30, min_periods=1).mean()
+    )
+
     return df_daily
 
 
