@@ -1,3 +1,5 @@
+import pandas as pd
+
 def aggregate_overall_weekly(df_silver: pd.DataFrame) -> pd.DataFrame:
     """Aggregate to one row per week (ISO week, Monday start)."""
     df = df_silver.copy()
