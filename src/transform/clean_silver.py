@@ -6,7 +6,7 @@ def clean_to_silver(bronze: pd.DataFrame) -> pd.DataFrame:
     bronze = bronze[bronze["itemCategoryCode"] == "BATTERY"].copy()
 
     # Filter to EXIDE brand only
-    df = df[df["brandCode"].isin(["EXIDE", "DAGENITE", "LUCAS"])].copy()
+    bronze = bronze[bronze["brandCode"].isin(["EXIDE", "DAGENITE", "LUCAS"])].copy()
 
     # quantity: negative = sale, e.g. -2 means 2 units sold
     bronze["units_sold"] = bronze["quantity"].abs()
