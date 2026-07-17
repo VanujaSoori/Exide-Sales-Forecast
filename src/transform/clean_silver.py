@@ -5,13 +5,21 @@ def clean_to_silver(bronze: pd.DataFrame) -> pd.DataFrame:
     # Filter to battery items only
     bronze = bronze[bronze["itemCategoryCode"] == "BATTERY"].copy()
 
-    # Filter to EXIDE brand only
+    # Filter to EXIDE, DAGENITE, and LUCAS brands only
     bronze = bronze[bronze["brandCode"].isin(["EXIDE", "DAGENITE", "LUCAS"])].copy()
 
-    # quantity: negative = sale, e.g. -2 means 2 units sold
-    bronze["units_sold"] = bronze["quantity"].abs()
+    # Filter to actual sales/returns only — exclude Service Shipment and Service Credit Memo
+    bronze = bronze[bronze["documentType"].isin(["Sales Shipment", "Sales Return Receipt"])].copy()
 
-    # Types
+    # Gross transaction size (magnitude only) — useful for fraud/anomaly analysis later
+    bronze["gross_units"] = bronze["quantity"].abs()
+
+    # Net units — shipments positive, returns negative (quantity sign already encodes this)
+    bronze["net_units"] = -bronze["quantity"]
+
+    # Profit: costAmountActual is negative for normal sales, so adding nets correctly
+    bronze["profit"] = bronze["salesAmountActual"] + bronze["costAmountActual"]
+
     bronze["postingDate"] = pd.to_datetime(bronze["postingDate"])
 
     # Rename for clarity downstream
@@ -27,17 +35,17 @@ def clean_to_silver(bronze: pd.DataFrame) -> pd.DataFrame:
         "brandDescription": "brand_description",
     })
 
-    # Keep everything relevant for now — narrow further once you've reviewed brand-level detail
     bronze = bronze[[
         "posting_date", "item_no", "itemCategoryCode",
         "vehicle_type", "location_code", "location_description",
         "sales_person_code", "salesperson_name",
         "brand_code", "brand_description",
         "documentType",
-        "units_sold", "costAmountActual", "salesAmountActual"
+        "gross_units", "net_units", "profit",
+        "costAmountActual", "salesAmountActual"
     ]]
 
     # Drop rows missing critical fields
-    bronze = bronze.dropna(subset=["posting_date", "units_sold"])
+    bronze = bronze.dropna(subset=["posting_date", "net_units"])
 
     return bronze
