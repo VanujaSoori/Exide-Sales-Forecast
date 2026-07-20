@@ -6,7 +6,7 @@ def clean_to_silver(bronze: pd.DataFrame) -> pd.DataFrame:
     bronze = bronze[bronze["itemCategoryCode"] == "BATTERY"].copy()
 
     # Filter to EXIDE, DAGENITE, and LUCAS brands only
-    bronze = bronze[bronze["brandCode"].isin(["EXIDE", "DAGENITE", "LUCAS"])].copy()
+    bronze = bronze[bronze["brandCode"].isin(["EXIDE", "DAGENITE"])].copy()
 
     # Filter to actual sales/returns only — exclude Service Shipment and Service Credit Memo
     bronze = bronze[bronze["documentType"].isin(["Sales Shipment", "Sales Return Receipt"])].copy()
