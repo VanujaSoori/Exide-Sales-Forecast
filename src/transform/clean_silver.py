@@ -5,24 +5,20 @@ def clean_to_silver(bronze: pd.DataFrame) -> pd.DataFrame:
     # Filter to battery items only
     bronze = bronze[bronze["itemCategoryCode"] == "BATTERY"].copy()
 
-    # Filter to EXIDE, DAGENITE, and LUCAS brands only
+    # Filter to EXIDE and DAGENITE brands only — LUCAS has no real battery volume
     bronze = bronze[bronze["brandCode"].isin(["EXIDE", "DAGENITE"])].copy()
 
     # Filter to actual sales/returns only — exclude Service Shipment and Service Credit Memo
     bronze = bronze[bronze["documentType"].isin(["Sales Shipment", "Sales Return Receipt"])].copy()
 
-    # Gross transaction size (magnitude only) — useful for fraud/anomaly analysis later
+    # Filter to Sri Lanka only — exclude export/foreign sales
+    bronze = bronze[bronze["countryRegionCode"] == "LK"].copy()
+
     bronze["gross_units"] = bronze["quantity"].abs()
-
-    # Net units — shipments positive, returns negative (quantity sign already encodes this)
     bronze["net_units"] = -bronze["quantity"]
-
-    # Profit: costAmountActual is negative for normal sales, so adding nets correctly
     bronze["profit"] = bronze["salesAmountActual"] + bronze["costAmountActual"]
-
     bronze["postingDate"] = pd.to_datetime(bronze["postingDate"])
 
-    # Rename for clarity downstream
     bronze = bronze.rename(columns={
         "itemCategory2": "vehicle_type",
         "locationCode": "location_code",
@@ -45,7 +41,6 @@ def clean_to_silver(bronze: pd.DataFrame) -> pd.DataFrame:
         "costAmountActual", "salesAmountActual"
     ]]
 
-    # Drop rows missing critical fields
     bronze = bronze.dropna(subset=["posting_date", "net_units"])
 
     return bronze
