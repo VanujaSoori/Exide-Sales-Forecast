@@ -309,3 +309,35 @@ def build_gold_vehicle_brand_weekly(df_silver: pd.DataFrame) -> pd.DataFrame:
     weekly = add_time_features_vehicle_brand_weekly(weekly)
     weekly = add_lag_and_rolling_features_vehicle_brand_weekly(weekly)
     return weekly
+
+
+# ══════════════════════════════════════════════════════════════════
+# VEHICLE TYPE x BRAND — Monthly
+# ══════════════════════════════════════════════════════════════════
+
+def aggregate_by_vehicle_brand_monthly(df_silver: pd.DataFrame) -> pd.DataFrame:
+    df = df_silver.copy()
+    df["month_start"] = df["posting_date"].dt.to_period("M").dt.to_timestamp()
+    monthly = (
+        df.groupby(["month_start", "vehicle_type", "brand_code"])
+        .agg(total_units_sold=("net_units", "sum"))
+        .reset_index()
+    )
+    return monthly
+
+
+def fill_missing_months_by_vehicle_brand(df_monthly: pd.DataFrame) -> pd.DataFrame:
+    full_months = pd.date_range(df_monthly["month_start"].min(), df_monthly["month_start"].max(), freq="MS")
+    combos = df_monthly[["vehicle_type", "brand_code"]].drop_duplicates()
+
+    full_grid = combos.merge(pd.DataFrame({"month_start": full_months}), how="cross")
+    merged = full_grid.merge(df_monthly, on=["month_start", "vehicle_type", "brand_code"], how="left")
+    merged["was_filled"] = merged["total_units_sold"].isna()
+    merged["total_units_sold"] = merged["total_units_sold"].fillna(0)
+    return merged
+
+
+def build_gold_vehicle_brand_monthly(df_silver: pd.DataFrame) -> pd.DataFrame:
+    monthly = aggregate_by_vehicle_brand_monthly(df_silver)
+    monthly = fill_missing_months_by_vehicle_brand(monthly)
+    return monthly
