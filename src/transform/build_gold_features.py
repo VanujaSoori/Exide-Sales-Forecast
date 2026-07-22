@@ -341,3 +341,55 @@ def build_gold_vehicle_brand_monthly(df_silver: pd.DataFrame) -> pd.DataFrame:
     monthly = aggregate_by_vehicle_brand_monthly(df_silver)
     monthly = fill_missing_months_by_vehicle_brand(monthly)
     return monthly
+
+
+# ══════════════════════════════════════════════════════════════════
+# LOCATION — Weekly
+# ══════════════════════════════════════════════════════════════════
+
+def aggregate_by_location_weekly(df_silver: pd.DataFrame) -> pd.DataFrame:
+    df = df_silver.copy()
+    df["week_start"] = df["posting_date"].dt.to_period("W-SUN").apply(lambda p: p.start_time)
+    weekly = (
+        df.groupby(["week_start", "location_code"])
+        .agg(total_units_sold=("net_units", "sum"))
+        .reset_index()
+    )
+    return weekly
+
+
+def fill_missing_weeks_by_location(df_weekly: pd.DataFrame) -> pd.DataFrame:
+    full_weeks = pd.date_range(df_weekly["week_start"].min(), df_weekly["week_start"].max(), freq="W-MON")
+    locations = df_weekly["location_code"].unique()
+    full_grid = pd.MultiIndex.from_product([full_weeks, locations], names=["week_start", "location_code"]).to_frame(index=False)
+    merged = full_grid.merge(df_weekly, on=["week_start", "location_code"], how="left")
+    merged["was_filled"] = merged["total_units_sold"].isna()
+    merged["total_units_sold"] = merged["total_units_sold"].fillna(0)
+    return merged
+
+
+def add_time_features_location_weekly(df_weekly: pd.DataFrame) -> pd.DataFrame:
+    df_weekly = df_weekly.copy()
+    df_weekly["week_of_year"] = df_weekly["week_start"].dt.isocalendar().week.astype(int)
+    df_weekly["month"] = df_weekly["week_start"].dt.month
+    week_end = df_weekly["week_start"] + pd.Timedelta(days=6)
+    df_weekly["contains_month_end"] = (df_weekly["week_start"].dt.month != week_end.dt.month).astype(int)
+    return df_weekly
+
+
+def add_lag_and_rolling_features_location_weekly(df_weekly: pd.DataFrame, lag_weeks: int = 4) -> pd.DataFrame:
+    df_weekly = df_weekly.sort_values(["location_code", "week_start"]).copy()
+    df_weekly[f"lag_{lag_weeks}w"] = df_weekly.groupby("location_code")["total_units_sold"].shift(lag_weeks)
+    df_weekly["rolling_avg_4w"] = (
+        df_weekly.groupby("location_code")["total_units_sold"]
+        .transform(lambda s: s.shift(1).rolling(4, min_periods=1).mean())
+    )
+    return df_weekly
+
+
+def build_gold_location_weekly(df_silver: pd.DataFrame) -> pd.DataFrame:
+    weekly = aggregate_by_location_weekly(df_silver)
+    weekly = fill_missing_weeks_by_location(weekly)
+    weekly = add_time_features_location_weekly(weekly)
+    weekly = add_lag_and_rolling_features_location_weekly(weekly)
+    return weekly
