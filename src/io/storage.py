@@ -16,7 +16,17 @@ def read_bronze(blob_service, blob_path):
     blob_client = blob_service.get_blob_client(container="bronze", blob=blob_path)
     stream = blob_client.download_blob().readall()
     data = json.loads(stream)
-    return pd.DataFrame(data.get("value", data)) if isinstance(data, dict) else pd.DataFrame(data)
+
+    # Case 1: top-level dict with a "value" key (single-page OData response)
+    if isinstance(data, dict) and "value" in data:
+        return pd.DataFrame(data["value"])
+
+    # Case 2: list containing one wrapper dict (what some daily pulls produced)
+    if isinstance(data, list) and len(data) == 1 and isinstance(data[0], dict) and "value" in data[0]:
+        return pd.DataFrame(data[0]["value"])
+
+    # Case 3: already a flat list of real records
+    return pd.DataFrame(data)
 
 
 def save_silver(blob_service, df, blob_path):
