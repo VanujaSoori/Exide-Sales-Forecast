@@ -1,12 +1,11 @@
 import pandas as pd
 
-
 def clean_to_silver(bronze: pd.DataFrame) -> pd.DataFrame:
     # Filter to battery items only
     bronze = bronze[bronze["itemCategoryCode"] == "BATTERY"].copy()
 
-    # Filter to EXIDE and DAGENITE brands only — LUCAS has no real battery volume
-    bronze = bronze[bronze["brandCode"].isin(["EXIDE", "DAGENITE"])].copy()
+    # Filter to EXIDE, DAGENITE and LUCAS brands 
+    bronze = bronze[bronze["brandCode"].isin(["EXIDE", "DAGENITE", "LUCAS"])].copy()
 
     # Filter to actual sales/returns only — exclude Service Shipment and Service Credit Memo
     bronze = bronze[bronze["documentType"].isin(["Sales Shipment", "Sales Return Receipt"])].copy()

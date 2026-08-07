@@ -53,3 +53,35 @@ def read_gold(blob_service, blob_path):
     blob_client = blob_service.get_blob_client(container="gold", blob=blob_path)
     stream = blob_client.download_blob().readall()
     return pd.read_parquet(io.BytesIO(stream))
+
+def append_json_history(blob_service, new_records, blob_path):
+    """Reads existing history (if any), appends new records, writes back."""
+    blob_client = blob_service.get_blob_client(container="gold", blob=blob_path)
+    try:
+        stream = blob_client.download_blob().readall()
+        existing = json.loads(stream)
+    except Exception:
+        existing = []
+
+    combined = existing + new_records
+    blob_client.upload_blob(json.dumps(combined, indent=2), overwrite=True)
+    return combined
+
+
+def read_json_history(blob_service, blob_path):
+    blob_client = blob_service.get_blob_client(container="gold", blob=blob_path)
+    try:
+        stream = blob_client.download_blob().readall()
+        return json.loads(stream)
+    except Exception:
+        return []
+    
+def save_history_as_excel(blob_service, history_records, blob_path):
+    """Converts a list of forecast history records to Excel and saves to blob storage."""
+    df = pd.DataFrame(history_records)
+    buffer = io.BytesIO()
+    df.to_excel(buffer, index=False, engine="openpyxl")
+    buffer.seek(0)
+    blob_client = blob_service.get_blob_client(container="gold", blob=blob_path)
+    blob_client.upload_blob(buffer, overwrite=True)
+    return len(df)
