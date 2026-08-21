@@ -1,6 +1,8 @@
 import pandas as pd
 
 def clean_to_silver(bronze: pd.DataFrame) -> pd.DataFrame:
+
+    bronze = bronze[bronze["entryType"] == "Sale"].copy()
     # Filter to battery items only
     bronze = bronze[bronze["itemCategoryCode"] == "BATTERY"].copy()
 
