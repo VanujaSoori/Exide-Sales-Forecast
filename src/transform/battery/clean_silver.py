@@ -11,7 +11,7 @@ def clean_to_silver(bronze: pd.DataFrame) -> pd.DataFrame:
 
     # Filter to actual sales/returns only — exclude Service Shipment and Service Credit Memo
     bronze = bronze[bronze["documentType"].isin(["Sales Shipment", "Sales Return Receipt"])].copy()
-
++
     # Filter to Sri Lanka only — exclude export/foreign sales
     bronze = bronze[bronze["countryRegionCode"] == "LK"].copy()
 
