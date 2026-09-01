@@ -34,10 +34,12 @@ def add_lag_and_rolling_features_weekly(df_weekly: pd.DataFrame, lag_weeks: int 
     return df_weekly
 
 
-def build_gold_overall_weekly(df_silver: pd.DataFrame) -> pd.DataFrame:
+def build_gold_overall_weekly(df_silver: pd.DataFrame, holiday_calendar: pd.DataFrame) -> pd.DataFrame:
     weekly = aggregate_overall_weekly(df_silver)
     weekly = fill_missing_weeks(weekly)
     weekly = add_time_features_weekly(weekly)
+    weekly = add_working_days_weekly(weekly, holiday_calendar)
+    weekly = add_rate_lag_and_rolling_features_weekly(weekly)
     weekly = add_lag_and_rolling_features_weekly(weekly)
     return weekly
 
@@ -77,11 +79,12 @@ def add_lag_and_rolling_features_monthly(df_monthly: pd.DataFrame) -> pd.DataFra
     return df_monthly
 
 
-def build_gold_overall_monthly(df_silver: pd.DataFrame) -> pd.DataFrame:
+def build_gold_overall_monthly(df_silver: pd.DataFrame, holiday_calendar: pd.DataFrame) -> pd.DataFrame:
     monthly = aggregate_overall_monthly(df_silver)
     monthly = fill_missing_months(monthly)
     monthly = add_time_features_monthly(monthly)
     monthly = add_lag_and_rolling_features_monthly(monthly)
+    monthly = add_working_days_monthly(monthly, holiday_calendar)
     return monthly
 
 # BRAND — Weekly
@@ -126,11 +129,13 @@ def add_lag_and_rolling_features_brand_weekly(df_weekly: pd.DataFrame, lag_weeks
     return df_weekly
 
 
-def build_gold_brand_weekly(df_silver: pd.DataFrame) -> pd.DataFrame:
+def build_gold_brand_weekly(df_silver: pd.DataFrame, holiday_calendar: pd.DataFrame) -> pd.DataFrame:
     weekly = aggregate_by_brand_weekly(df_silver)
     weekly = fill_missing_weeks_by_brand(weekly)
     weekly = add_time_features_brand_weekly(weekly)
     weekly = add_lag_and_rolling_features_brand_weekly(weekly)
+    weekly = add_working_days_weekly_grouped(weekly, holiday_calendar, group_col="brand_code")
+    weekly = add_rate_lag_and_rolling_features_weekly_grouped(weekly, group_col="brand_code")
     return weekly
 
 # BRAND — Monthly
@@ -203,11 +208,13 @@ def add_lag_and_rolling_features_vehicle_weekly(df_weekly: pd.DataFrame, lag_wee
     return df_weekly
 
 
-def build_gold_vehicle_weekly(df_silver: pd.DataFrame) -> pd.DataFrame:
+def build_gold_vehicle_weekly(df_silver: pd.DataFrame, holiday_calendar: pd.DataFrame) -> pd.DataFrame:
     weekly = aggregate_by_vehicle_weekly(df_silver)
     weekly = fill_missing_weeks_by_vehicle(weekly)
     weekly = add_time_features_vehicle_weekly(weekly)
     weekly = add_lag_and_rolling_features_vehicle_weekly(weekly)
+    weekly = add_working_days_weekly_grouped(weekly, holiday_calendar, group_col="vehicle_type")
+    weekly = add_rate_lag_and_rolling_features_weekly_grouped(weekly, group_col="vehicle_type")
     return weekly
 
 # VEHICLE TYPE — Monthly
@@ -360,11 +367,13 @@ def add_lag_and_rolling_features_location_weekly(df_weekly: pd.DataFrame, lag_we
     return df_weekly
 
 
-def build_gold_location_weekly(df_silver: pd.DataFrame) -> pd.DataFrame:
+def build_gold_location_weekly(df_silver: pd.DataFrame, holiday_calendar: pd.DataFrame) -> pd.DataFrame:
     weekly = aggregate_by_location_weekly(df_silver)
     weekly = fill_missing_weeks_by_location(weekly)
     weekly = add_time_features_location_weekly(weekly)
     weekly = add_lag_and_rolling_features_location_weekly(weekly)
+    weekly = add_working_days_weekly_grouped(weekly, holiday_calendar, group_col="location_code")
+    weekly = add_rate_lag_and_rolling_features_weekly_grouped(weekly, group_col="location_code")
     return weekly
 
 # LOCATION — Monthly
@@ -432,11 +441,13 @@ def add_lag_and_rolling_features_item_weekly(df_weekly: pd.DataFrame, lag_weeks:
 
 #Item-level weekly/monthly
 
-def build_gold_item_weekly(df_silver: pd.DataFrame) -> pd.DataFrame:
+def build_gold_item_weekly(df_silver: pd.DataFrame, holiday_calendar: pd.DataFrame) -> pd.DataFrame:
     weekly = aggregate_by_item_weekly(df_silver)
     weekly = fill_missing_weeks_by_item(weekly)
     weekly = add_time_features_item_weekly(weekly)
     weekly = add_lag_and_rolling_features_item_weekly(weekly)
+    weekly = add_working_days_weekly_grouped(weekly, holiday_calendar, group_col="item_group")
+    weekly = add_rate_lag_and_rolling_features_weekly_grouped(weekly, group_col="item_group")
     return weekly
 
 
@@ -461,3 +472,71 @@ def build_gold_item_monthly(df_silver: pd.DataFrame) -> pd.DataFrame:
     monthly = aggregate_by_item_monthly(df_silver)
     monthly = fill_missing_months_by_item(monthly)
     return monthly
+
+
+#Calculate working days
+
+def compute_working_days(period_start, period_end, holiday_dates_set):
+    """Counts non-Sunday, non-holiday days in a date range (inclusive)."""
+    all_days = pd.date_range(period_start, period_end)
+    return sum(1 for d in all_days if d.weekday() != 6 and d.date() not in holiday_dates_set)
+
+
+def add_working_days_weekly(df_weekly: pd.DataFrame, holiday_calendar: pd.DataFrame) -> pd.DataFrame:
+    df_weekly = df_weekly.copy()
+    holiday_dates_set = set(holiday_calendar["date"].dt.date)
+
+    df_weekly["working_days"] = df_weekly["week_start"].apply(
+        lambda ws: compute_working_days(ws, ws + pd.Timedelta(days=6), holiday_dates_set)
+    )
+    # Guard against a fully-closed week (shouldn't happen, but avoid divide-by-zero)
+    df_weekly["working_days"] = df_weekly["working_days"].clip(lower=1)
+
+    df_weekly["units_per_working_day"] = df_weekly["total_units_sold"] / df_weekly["working_days"]
+    return df_weekly
+
+
+def add_rate_lag_and_rolling_features_weekly(df_weekly: pd.DataFrame, lag_weeks: int = 4) -> pd.DataFrame:
+    df_weekly = df_weekly.sort_values("week_start").copy()
+    df_weekly["rate_lag_4w"] = df_weekly["units_per_working_day"].shift(lag_weeks)
+    df_weekly["rate_rolling_avg_4w"] = (
+        df_weekly["units_per_working_day"].shift(1).rolling(window=4, min_periods=1).mean()
+    )
+    return df_weekly
+
+def add_working_days_monthly(df_monthly: pd.DataFrame, holiday_calendar: pd.DataFrame) -> pd.DataFrame:
+    df_monthly = df_monthly.copy()
+    holiday_dates_set = set(holiday_calendar["date"].dt.date)
+
+    def working_days_in_month(month_start):
+        month_end = month_start + pd.offsets.MonthEnd(0)
+        return compute_working_days(month_start, month_end, holiday_dates_set)
+
+    df_monthly["working_days"] = df_monthly["month_start"].apply(working_days_in_month)
+    df_monthly["working_days"] = df_monthly["working_days"].clip(lower=1)
+    df_monthly["units_per_working_day"] = df_monthly["total_units_sold"] / df_monthly["working_days"]
+    return df_monthly
+
+def add_working_days_weekly_grouped(df_weekly: pd.DataFrame, holiday_calendar: pd.DataFrame, group_col: str) -> pd.DataFrame:
+    df_weekly = df_weekly.copy()
+    holiday_dates_set = set(holiday_calendar["date"].dt.date)
+
+    unique_weeks = df_weekly["week_start"].unique()
+    working_days_map = {
+        ws: max(compute_working_days(pd.Timestamp(ws), pd.Timestamp(ws) + pd.Timedelta(days=6), holiday_dates_set), 1)
+        for ws in unique_weeks
+    }
+
+    df_weekly["working_days"] = df_weekly["week_start"].map(working_days_map)
+    df_weekly["units_per_working_day"] = df_weekly["total_units_sold"] / df_weekly["working_days"]
+    return df_weekly
+
+
+def add_rate_lag_and_rolling_features_weekly_grouped(df_weekly: pd.DataFrame, group_col: str, lag_weeks: int = 4) -> pd.DataFrame:
+    df_weekly = df_weekly.sort_values([group_col, "week_start"]).copy()
+    df_weekly["rate_lag_4w"] = df_weekly.groupby(group_col)["units_per_working_day"].shift(lag_weeks)
+    df_weekly["rate_rolling_avg_4w"] = (
+        df_weekly.groupby(group_col)["units_per_working_day"]
+        .transform(lambda s: s.shift(1).rolling(4, min_periods=1).mean())
+    )
+    return df_weekly
