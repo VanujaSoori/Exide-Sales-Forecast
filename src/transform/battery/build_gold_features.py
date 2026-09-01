@@ -161,9 +161,10 @@ def fill_missing_months_by_brand(df_monthly: pd.DataFrame) -> pd.DataFrame:
     return merged
 
 
-def build_gold_brand_monthly(df_silver: pd.DataFrame) -> pd.DataFrame:
+def build_gold_brand_monthly(df_silver: pd.DataFrame, holiday_calendar: pd.DataFrame) -> pd.DataFrame:
     monthly = aggregate_by_brand_monthly(df_silver)
     monthly = fill_missing_months_by_brand(monthly)
+    monthly = add_working_days_monthly_grouped(monthly, holiday_calendar, group_col="brand_code")
     return monthly
 
 # VEHICLE TYPE — Weekly
@@ -240,9 +241,10 @@ def fill_missing_months_by_vehicle(df_monthly: pd.DataFrame) -> pd.DataFrame:
     return merged
 
 
-def build_gold_vehicle_monthly(df_silver: pd.DataFrame) -> pd.DataFrame:
+def build_gold_vehicle_monthly(df_silver: pd.DataFrame, holiday_calendar: pd.DataFrame) -> pd.DataFrame:
     monthly = aggregate_by_vehicle_monthly(df_silver)
     monthly = fill_missing_months_by_vehicle(monthly)
+    monthly = add_working_days_monthly_grouped(monthly, holiday_calendar, group_col="vehicle_type")
     return monthly
 
 # VEHICLE TYPE x BRAND — Weekly
@@ -399,9 +401,10 @@ def fill_missing_months_by_location(df_monthly: pd.DataFrame) -> pd.DataFrame:
     return merged
 
 
-def build_gold_location_monthly(df_silver: pd.DataFrame) -> pd.DataFrame:
+def build_gold_location_monthly(df_silver: pd.DataFrame, holiday_calendar: pd.DataFrame) -> pd.DataFrame:
     monthly = aggregate_by_location_monthly(df_silver)
     monthly = fill_missing_months_by_location(monthly)
+    monthly = add_working_days_monthly_grouped(monthly, holiday_calendar, group_col="location_code")
     return monthly
 
 def aggregate_by_item_weekly(df_silver: pd.DataFrame) -> pd.DataFrame:
@@ -468,9 +471,10 @@ def fill_missing_months_by_item(df_monthly: pd.DataFrame) -> pd.DataFrame:
     return merged
 
 
-def build_gold_item_monthly(df_silver: pd.DataFrame) -> pd.DataFrame:
+def build_gold_item_monthly(df_silver: pd.DataFrame, holiday_calendar: pd.DataFrame) -> pd.DataFrame:
     monthly = aggregate_by_item_monthly(df_silver)
     monthly = fill_missing_months_by_item(monthly)
+    monthly = add_working_days_monthly_grouped(monthly, holiday_calendar, group_col="item_group")
     return monthly
 
 
@@ -540,3 +544,17 @@ def add_rate_lag_and_rolling_features_weekly_grouped(df_weekly: pd.DataFrame, gr
         .transform(lambda s: s.shift(1).rolling(4, min_periods=1).mean())
     )
     return df_weekly
+
+def add_working_days_monthly_grouped(df_monthly: pd.DataFrame, holiday_calendar: pd.DataFrame, group_col: str) -> pd.DataFrame:
+    df_monthly = df_monthly.copy()
+    holiday_dates_set = set(holiday_calendar["date"].dt.date)
+
+    unique_months = df_monthly["month_start"].unique()
+    working_days_map = {
+        ms: max(compute_working_days(pd.Timestamp(ms), pd.Timestamp(ms) + pd.offsets.MonthEnd(0), holiday_dates_set), 1)
+        for ms in unique_months
+    }
+
+    df_monthly["working_days"] = df_monthly["month_start"].map(working_days_map)
+    df_monthly["units_per_working_day"] = df_monthly["total_units_sold"] / df_monthly["working_days"]
+    return df_monthly
