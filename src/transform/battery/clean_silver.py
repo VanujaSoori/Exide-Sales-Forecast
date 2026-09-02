@@ -74,11 +74,17 @@ def clean_to_silver(bronze: pd.DataFrame) -> pd.DataFrame:
 
 
 def clean_to_silver_analysis(bronze: pd.DataFrame) -> pd.DataFrame:
+    """
+    Broader cleaning for analysis/fraud detection — keeps Sale (shipments + returns),
+    Purchase, and Transfer entries, plus resolved customer identity and lot tracking.
+    Separate from clean_to_silver(), which is forecasting-only (Sale/Shipment).
+    """
     bronze = bronze[bronze["entryType"].isin(["Sale", "Purchase", "Transfer"])].copy()
     bronze = bronze[bronze["itemCategoryCode"] == "BATTERY"].copy()
     bronze = bronze[bronze["brandCode"].isin(["EXIDE", "DAGENITE"])].copy()
     bronze = bronze[bronze["countryRegionCode"] == "LK"].copy()
 
+    # Remove anomalous zero-value transactions with a contradictory quantity sign
     anomaly_shipment = (
         (bronze["salesAmountActual"] == 0)
         & (bronze["documentType"] == "Sales_x0020_Shipment")
@@ -93,25 +99,37 @@ def clean_to_silver_analysis(bronze: pd.DataFrame) -> pd.DataFrame:
 
     bronze["postingDate"] = pd.to_datetime(bronze["postingDate"])
 
-    # Customer resolution: prefer subCustomer fields, fall back to customer fields
+    # Customer resolution: sub-customer takes priority (the real, specific customer);
+    # fall back to the main customer fields only when no sub-customer exists
+    # (in that case, customerName is often a generic payment-method label like "CASH CUSTOMER")
+    bronze["has_sub_customer"] = bronze["subCustomerName"].astype(str).str.strip() != ""
+    bronze["subCustomerName_clean"] = bronze["subCustomerName"].astype(str).str.strip().str.upper()
+
     bronze["resolved_customer_no"] = bronze["subCustomerCode"].where(
-        bronze["subCustomerName"].str.strip().ne(""), bronze["customerNo"]
+        bronze["has_sub_customer"] & (bronze["subCustomerCode"].astype(str).str.strip() != ""),
+        bronze["subCustomerName_clean"].where(bronze["has_sub_customer"], bronze["customerNo"])
     )
     bronze["resolved_customer_name"] = bronze["subCustomerName"].where(
-        bronze["subCustomerName"].str.strip().ne(""), bronze["customerName"]
+        bronze["has_sub_customer"], bronze["customerName"]
     )
     bronze["resolved_customer_address"] = bronze["subCustomerAddress"].where(
-        bronze["subCustomerName"].str.strip().ne(""), bronze["customerAddress"]
+        bronze["has_sub_customer"], bronze["customerAddress"]
     )
     bronze["resolved_customer_phone1"] = bronze["subPhoneNo1"].where(
-        bronze["subCustomerName"].str.strip().ne(""), bronze["phoneNo1"]
+        bronze["has_sub_customer"], bronze["phoneNo1"]
     )
     bronze["resolved_customer_phone2"] = bronze["subPhoneNo2"].where(
-        bronze["subCustomerName"].str.strip().ne(""), bronze["phoneNo2"]
+        bronze["has_sub_customer"], bronze["phoneNo2"]
     )
     bronze["resolved_customer_email"] = bronze["subEmail"].where(
-        bronze["subCustomerName"].str.strip().ne(""), bronze["email"]
+        bronze["has_sub_customer"], bronze["email"]
     )
+
+    # Flag generic/non-promotable accounts (cash sales with no real customer identity)
+    GENERIC_CUSTOMER_NAMES = {
+        "CASH CUSTOMER", "DEALER- CASH CUSTOMER", "HYBRID CASH CUSTOMER", "CORPORATE - CASH CUSTOMER"
+    }
+    bronze["is_identifiable_customer"] = ~bronze["resolved_customer_name"].astype(str).str.strip().str.upper().isin(GENERIC_CUSTOMER_NAMES)
 
     bronze = bronze.rename(columns={
         "itemCategory2": "vehicle_type",
@@ -124,6 +142,7 @@ def clean_to_silver_analysis(bronze: pd.DataFrame) -> pd.DataFrame:
         "brandCode": "brand_code",
         "brandDescription": "brand_description",
         "LotNo": "lot_no",
+        "customerCity": "customer_city",
     })
 
     bronze = bronze[[
@@ -135,7 +154,7 @@ def clean_to_silver_analysis(bronze: pd.DataFrame) -> pd.DataFrame:
         "quantity", "costAmountActual", "salesAmountActual",
         "resolved_customer_no", "resolved_customer_name", "resolved_customer_address",
         "resolved_customer_phone1", "resolved_customer_phone2", "resolved_customer_email",
-        "customerCity",
+        "customer_city", "is_identifiable_customer",
     ]]
 
     bronze = bronze.dropna(subset=["posting_date", "quantity"])
