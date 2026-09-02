@@ -99,9 +99,6 @@ def clean_to_silver_analysis(bronze: pd.DataFrame) -> pd.DataFrame:
 
     bronze["postingDate"] = pd.to_datetime(bronze["postingDate"])
 
-    # Customer resolution: sub-customer takes priority (the real, specific customer);
-    # fall back to the main customer fields only when no sub-customer exists
-    # (in that case, customerName is often a generic payment-method label like "CASH CUSTOMER")
     bronze["has_sub_customer"] = bronze["subCustomerName"].astype(str).str.strip() != ""
     bronze["subCustomerName_clean"] = bronze["subCustomerName"].astype(str).str.strip().str.upper()
 
@@ -112,8 +109,22 @@ def clean_to_silver_analysis(bronze: pd.DataFrame) -> pd.DataFrame:
     bronze["resolved_customer_name"] = bronze["subCustomerName"].where(
         bronze["has_sub_customer"], bronze["customerName"]
     )
+        # Build a combined full address from the main customer fields
+    bronze["customer_full_address"] = (
+        bronze["customerAddress"].astype(str).str.strip() + ", " +
+        bronze["customerAddress2"].astype(str).str.strip() + ", " +
+        bronze["customerCity"].astype(str).str.strip()
+    )
+    # Clean up cases where one or more parts were empty (avoid dangling ", ,")
+    bronze["customer_full_address"] = (
+        bronze["customer_full_address"]
+        .str.replace(r",\s*,", ",", regex=True)
+        .str.replace(r"^,\s*|,\s*$", "", regex=True)
+        .str.strip()
+    )
+
     bronze["resolved_customer_address"] = bronze["subCustomerAddress"].where(
-        bronze["has_sub_customer"], bronze["customerAddress"]
+        bronze["has_sub_customer"], bronze["customer_full_address"]
     )
     bronze["resolved_customer_phone1"] = bronze["subPhoneNo1"].where(
         bronze["has_sub_customer"], bronze["phoneNo1"]
