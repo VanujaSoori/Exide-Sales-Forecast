@@ -74,21 +74,11 @@ def clean_to_silver(bronze: pd.DataFrame) -> pd.DataFrame:
 
 
 def clean_to_silver_analysis(bronze: pd.DataFrame) -> pd.DataFrame:
-    """
-    Analysis/fraud-detection silver — keeps Sale (Shipment + Return), Purchase, and
-    Transfer entries. Broader than clean_to_silver(), which is forecasting-only.
-
-    quantity sign convention (confirmed from real data):
-      negative = stock OUT (Sales Shipment)
-      positive = stock IN (Sales Return, Purchase)
-      Transfer = near-zero net across the company (offsetting in/out between locations)
-    """
     bronze = bronze[bronze["entryType"].isin(["Sale", "Purchase", "Transfer"])].copy()
     bronze = bronze[bronze["itemCategoryCode"] == "BATTERY"].copy()
     bronze = bronze[bronze["brandCode"].isin(["EXIDE", "DAGENITE"])].copy()
     bronze = bronze[bronze["countryRegionCode"] == "LK"].copy()
 
-    # Remove the same anomalous zero-value transactions as forecasting silver
     anomaly_shipment = (
         (bronze["salesAmountActual"] == 0)
         & (bronze["documentType"] == "Sales_x0020_Shipment")
@@ -102,6 +92,26 @@ def clean_to_silver_analysis(bronze: pd.DataFrame) -> pd.DataFrame:
     bronze = bronze[~(anomaly_shipment | anomaly_return)].copy()
 
     bronze["postingDate"] = pd.to_datetime(bronze["postingDate"])
+
+    # Customer resolution: prefer subCustomer fields, fall back to customer fields
+    bronze["resolved_customer_no"] = bronze["subCustomerCode"].where(
+        bronze["subCustomerName"].str.strip().ne(""), bronze["customerNo"]
+    )
+    bronze["resolved_customer_name"] = bronze["subCustomerName"].where(
+        bronze["subCustomerName"].str.strip().ne(""), bronze["customerName"]
+    )
+    bronze["resolved_customer_address"] = bronze["subCustomerAddress"].where(
+        bronze["subCustomerName"].str.strip().ne(""), bronze["customerAddress"]
+    )
+    bronze["resolved_customer_phone1"] = bronze["subPhoneNo1"].where(
+        bronze["subCustomerName"].str.strip().ne(""), bronze["phoneNo1"]
+    )
+    bronze["resolved_customer_phone2"] = bronze["subPhoneNo2"].where(
+        bronze["subCustomerName"].str.strip().ne(""), bronze["phoneNo2"]
+    )
+    bronze["resolved_customer_email"] = bronze["subEmail"].where(
+        bronze["subCustomerName"].str.strip().ne(""), bronze["email"]
+    )
 
     bronze = bronze.rename(columns={
         "itemCategory2": "vehicle_type",
@@ -122,7 +132,10 @@ def clean_to_silver_analysis(bronze: pd.DataFrame) -> pd.DataFrame:
         "sales_person_code", "salesperson_name",
         "brand_code", "brand_description",
         "entryType", "documentType", "lot_no",
-        "quantity", "costAmountActual", "salesAmountActual"
+        "quantity", "costAmountActual", "salesAmountActual",
+        "resolved_customer_no", "resolved_customer_name", "resolved_customer_address",
+        "resolved_customer_phone1", "resolved_customer_phone2", "resolved_customer_email",
+        "customerCity",
     ]]
 
     bronze = bronze.dropna(subset=["posting_date", "quantity"])
