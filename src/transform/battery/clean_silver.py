@@ -75,7 +75,7 @@ def clean_to_silver(bronze: pd.DataFrame) -> pd.DataFrame:
 
 def clean_to_silver_analysis(bronze: pd.DataFrame) -> pd.DataFrame:
     """
-    Broader cleaning for analysis/fraud detection — keeps Sale (shipments + returns),
+    Broader cleaning for analysis/fraud detection - keeps Sale (shipments + returns),
     Purchase, and Transfer entries, plus resolved customer identity and lot tracking.
     Separate from clean_to_silver(), which is forecasting-only (Sale/Shipment).
     """
@@ -140,7 +140,6 @@ def clean_to_silver_analysis(bronze: pd.DataFrame) -> pd.DataFrame:
         bronze["has_sub_customer"], bronze["email"]
     )
 
-    # Flag generic/non-promotable accounts (cash sales with no real customer identity)
     GENERIC_CUSTOMER_NAMES = {
         "CASH CUSTOMER", "DEALER- CASH CUSTOMER", "HYBRID CASH CUSTOMER", "CORPORATE - CASH CUSTOMER"
     }
