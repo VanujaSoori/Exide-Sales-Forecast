@@ -126,6 +126,10 @@ def clean_to_silver_analysis(bronze: pd.DataFrame) -> pd.DataFrame:
     bronze["resolved_customer_address"] = bronze["subCustomerAddress"].where(
         bronze["has_sub_customer"], bronze["customer_full_address"]
     )
+    bronze["resolved_customer_address"] = bronze["subCustomerAddress"].where(
+    bronze["has_sub_customer"], bronze["customer_full_address"]
+    )
+    bronze["resolved_customer_address"] = bronze["resolved_customer_address"].str.replace(r"\s+", " ", regex=True).str.strip()
     bronze["resolved_customer_phone1"] = bronze["subPhoneNo1"].where(
         bronze["has_sub_customer"], bronze["phoneNo1"]
     )
