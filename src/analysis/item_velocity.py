@@ -29,7 +29,7 @@ def compute_item_velocity(analysis_silver: pd.DataFrame, min_matched_events: int
     item_velocity["velocity_percentile"] = (1 - item_velocity["avg_days_to_sell"].rank(pct=True)) * 100
 
     item_names = analysis_silver[["item_no", "item_description"]].drop_duplicates(subset="item_no")
-    item_agg = item_agg.merge(item_names, on="item_no", how="left")
+    item_velocity = item_velocity.merge(item_names, on="item_no", how="left")
 
     return item_velocity.sort_values("avg_days_to_sell")
 
