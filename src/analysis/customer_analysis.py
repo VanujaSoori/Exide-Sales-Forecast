@@ -3,10 +3,9 @@ import pandas as pd
 
 def build_customer_summary(analysis_silver: pd.DataFrame) -> pd.DataFrame:
     """
-    Builds a per-customer summary with precomputed sales/profit/volume percentile ranks.
-    Relies on is_identifiable_customer, already resolved in clean_to_silver_analysis()
-    (sub-customer name preferred, falls back to main customer name, flagged non-identifiable
-    if that name is a generic cash-sale label).
+    Builds a per-customer summary with precomputed sales/profit/volume percentile ranks,
+    plus a recency flag distinguishing active top customers from lapsed ones.
+    Relies on is_identifiable_customer, already resolved in clean_to_silver_analysis().
     """
     sales_only = analysis_silver[analysis_silver["entryType"] == "Sale"].copy()
     identifiable = sales_only[sales_only["is_identifiable_customer"]].copy()
@@ -36,9 +35,24 @@ def build_customer_summary(analysis_silver: pd.DataFrame) -> pd.DataFrame:
     customer_summary["profit_percentile"] = customer_summary["total_profit"].rank(pct=True) * 100
     customer_summary["volume_percentile"] = customer_summary["total_units"].rank(pct=True) * 100
 
+    # Recency: distinguishes active top customers from lapsed ones
+    customer_summary["days_since_last_purchase"] = (pd.Timestamp.today() - customer_summary["last_purchase"]).dt.days
+    customer_summary["is_active"] = customer_summary["days_since_last_purchase"] <= 180
+
     return customer_summary.sort_values("sales_percentile", ascending=False)
 
 
 def filter_by_percentile(df: pd.DataFrame, metric: str, threshold: float) -> pd.DataFrame:
     percentile_col = f"{metric}_percentile"
     return df[df[percentile_col] >= threshold]
+
+
+def get_lapsed_top_customers(df: pd.DataFrame, metric: str, threshold: float) -> pd.DataFrame:
+    """Top customers by the given metric who haven't purchased recently — re-engagement candidates."""
+    individual_prefixes = ("MR.", "MRS.", "MS.", "DR.", "MR ", "MRS ", "MS ", "DR ")
+
+    top = filter_by_percentile(df, metric, threshold)
+    lapsed = top[~top["is_active"]].copy()
+    lapsed["is_individual"] = lapsed["customer_name"].str.strip().str.upper().str.startswith(individual_prefixes)
+
+    return lapsed.sort_values("days_since_last_purchase", ascending=False)
