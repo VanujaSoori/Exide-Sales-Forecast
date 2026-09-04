@@ -31,6 +31,9 @@ def classify_items(analysis_silver: pd.DataFrame) -> pd.DataFrame:
     item_agg["volume_percentile"] = item_agg["total_units"].rank(pct=True) * 100
     item_agg["gp_percentile"] = item_agg["total_profit"].rank(pct=True) * 100
 
+    item_names = analysis_silver[["item_no", "item_description"]].drop_duplicates(subset="item_no")
+    item_agg = item_agg.merge(item_names, on="item_no", how="left")
+
     return item_agg.sort_values("total_units", ascending=False)
 
 def summarize_warranty_claims(analysis_silver: pd.DataFrame) -> pd.DataFrame:

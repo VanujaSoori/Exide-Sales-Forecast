@@ -151,6 +151,7 @@ def clean_to_silver_analysis(bronze: pd.DataFrame) -> pd.DataFrame:
         "locationDescription": "location_description",
         "postingDate": "posting_date",
         "itemNo": "item_no",
+        "itemDescription": "item_description",
         "salesPersonCode": "sales_person_code",
         "salespersonName": "salesperson_name",
         "brandCode": "brand_code",
@@ -160,7 +161,7 @@ def clean_to_silver_analysis(bronze: pd.DataFrame) -> pd.DataFrame:
     })
 
     bronze = bronze[[
-        "posting_date", "item_no", "itemCategoryCode",
+        "posting_date", "item_no", "item_description", "itemCategoryCode",
         "vehicle_type", "location_code", "location_description",
         "sales_person_code", "salesperson_name",
         "brand_code", "brand_description",
