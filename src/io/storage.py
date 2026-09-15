@@ -40,7 +40,6 @@ def read_silver(blob_service, blob_path):
     stream = blob_client.download_blob().readall()
     return pd.DataFrame(json.loads(stream))
 
-
 def save_gold(blob_service, df, blob_path):
     buffer = io.BytesIO()
     df.to_parquet(buffer, index=False)
@@ -53,6 +52,17 @@ def read_gold(blob_service, blob_path):
     blob_client = blob_service.get_blob_client(container="gold", blob=blob_path)
     stream = blob_client.download_blob().readall()
     return pd.read_parquet(io.BytesIO(stream))
+
+def save_gold_json(blob_service, df, blob_path):
+    payload = df.to_json(orient="records", date_format="iso", lines=False)
+    blob_client = blob_service.get_blob_client(container="gold", blob=blob_path)
+    blob_client.upload_blob(payload, overwrite=True)
+
+
+def read_gold_json(blob_service, blob_path):
+    blob_client = blob_service.get_blob_client(container="gold", blob=blob_path)
+    stream = blob_client.download_blob().readall()
+    return pd.DataFrame(json.loads(stream))
 
 def append_json_history(blob_service, new_records, blob_path):
     """Reads existing history (if any), appends new records, writes back."""
