@@ -97,10 +97,6 @@ def summarize_by_salesperson(matched_pairs: pd.DataFrame, analysis_silver: pd.Da
     return summary.sort_values("round_trip_rate", ascending=False)
 
 def summarize_by_customer(matched_pairs: pd.DataFrame, analysis_silver: pd.DataFrame) -> pd.DataFrame:
-    """
-    Aggregates matched round-trips per customer, normalized by their total
-    month-end shipment activity. Restricted to identifiable customers only.
-    """
     sales_only = analysis_silver[analysis_silver["entryType"] == "Sale"].copy()
     shipments = sales_only[sales_only["documentType"] == "Sales_x0020_Shipment"].copy()
     shipments["day_of_month"] = shipments["posting_date"].dt.day
@@ -113,6 +109,13 @@ def summarize_by_customer(matched_pairs: pd.DataFrame, analysis_silver: pd.DataF
 
     identifiable_pairs = matched_pairs[matched_pairs["is_identifiable_customer"]].copy()
 
+    # Most frequent salesperson involved in this customer's round-trips
+    primary_salesperson = (
+        identifiable_pairs.groupby("customer_no_shipment")["sales_person_code"]
+        .agg(lambda x: x.value_counts().idxmax())
+        .rename("primary_salesperson")
+    )
+
     summary = identifiable_pairs.groupby("customer_no_shipment").agg(
         customer_name=("customer_name_shipment", "last"),
         round_trip_count=("item_no", "count"),
@@ -121,6 +124,8 @@ def summarize_by_customer(matched_pairs: pd.DataFrame, analysis_silver: pd.DataF
         distinct_salespeople=("sales_person_code", "nunique"),
         active_months=("shipment_date", lambda x: x.dt.to_period("M").nunique()),
     ).reset_index()
+
+    summary = summary.merge(primary_salesperson, left_on="customer_no_shipment", right_index=True, how="left")
 
     summary = summary.merge(
         total_month_end_by_customer.rename("total_month_end_shipments"),
