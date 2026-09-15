@@ -95,3 +95,40 @@ def summarize_by_salesperson(matched_pairs: pd.DataFrame, analysis_silver: pd.Da
     summary["value_percentile"] = summary["total_value_involved"].rank(pct=True) * 100
 
     return summary.sort_values("round_trip_rate", ascending=False)
+
+def summarize_by_customer(matched_pairs: pd.DataFrame, analysis_silver: pd.DataFrame) -> pd.DataFrame:
+    """
+    Aggregates matched round-trips per customer, normalized by their total
+    month-end shipment activity. Restricted to identifiable customers only.
+    """
+    sales_only = analysis_silver[analysis_silver["entryType"] == "Sale"].copy()
+    shipments = sales_only[sales_only["documentType"] == "Sales_x0020_Shipment"].copy()
+    shipments["day_of_month"] = shipments["posting_date"].dt.day
+    shipments["days_in_month"] = shipments["posting_date"].dt.days_in_month
+    month_end_shipments = shipments[shipments["day_of_month"] > shipments["days_in_month"] - 3]
+
+    total_month_end_by_customer = month_end_shipments[
+        month_end_shipments["is_identifiable_customer"]
+    ].groupby("resolved_customer_no").size()
+
+    identifiable_pairs = matched_pairs[matched_pairs["is_identifiable_customer"]].copy()
+
+    summary = identifiable_pairs.groupby("customer_no_shipment").agg(
+        customer_name=("customer_name_shipment", "last"),
+        round_trip_count=("item_no", "count"),
+        total_value_involved=("shipment_value", "sum"),
+        avg_days_between=("days_between", "mean"),
+        distinct_salespeople=("sales_person_code", "nunique"),
+        active_months=("shipment_date", lambda x: x.dt.to_period("M").nunique()),
+    ).reset_index()
+
+    summary = summary.merge(
+        total_month_end_by_customer.rename("total_month_end_shipments"),
+        left_on="customer_no_shipment", right_index=True, how="left"
+    )
+    summary["round_trip_rate"] = summary["round_trip_count"] / summary["total_month_end_shipments"]
+
+    summary["rate_percentile"] = summary["round_trip_rate"].rank(pct=True) * 100
+    summary["value_percentile"] = summary["total_value_involved"].rank(pct=True) * 100
+
+    return summary.sort_values("round_trip_rate", ascending=False)
