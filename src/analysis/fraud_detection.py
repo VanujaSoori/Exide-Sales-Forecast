@@ -62,3 +62,36 @@ def match_shipment_return_pairs(analysis_silver: pd.DataFrame, quantity_toleranc
                 used_return_indices.add(best_idx)
 
     return pd.DataFrame(matched_pairs)
+
+def summarize_by_salesperson(matched_pairs: pd.DataFrame, analysis_silver: pd.DataFrame) -> pd.DataFrame:
+    """
+    Aggregates matched round-trips per salesperson, normalized by their total
+    month-end shipment activity (not raw counts) to avoid conflating high-volume
+    salespeople with genuinely suspicious behavior.
+    """
+    sales_only = analysis_silver[analysis_silver["entryType"] == "Sale"].copy()
+    shipments = sales_only[sales_only["documentType"] == "Sales_x0020_Shipment"].copy()
+    shipments["day_of_month"] = shipments["posting_date"].dt.day
+    shipments["days_in_month"] = shipments["posting_date"].dt.days_in_month
+    month_end_shipments = shipments[shipments["day_of_month"] > shipments["days_in_month"] - 3]
+
+    total_month_end_shipments = month_end_shipments.groupby("sales_person_code").size()
+
+    summary = matched_pairs.groupby("sales_person_code").agg(
+        round_trip_count=("item_no", "count"),
+        total_value_involved=("shipment_value", "sum"),
+        avg_days_between=("days_between", "mean"),
+        identifiable_customer_share=("is_identifiable_customer", "mean"),
+        active_months=("shipment_date", lambda x: x.dt.to_period("M").nunique()),
+    ).reset_index()
+
+    summary = summary.merge(
+        total_month_end_shipments.rename("total_month_end_shipments"),
+        left_on="sales_person_code", right_index=True, how="left"
+    )
+    summary["round_trip_rate"] = summary["round_trip_count"] / summary["total_month_end_shipments"]
+
+    summary["rate_percentile"] = summary["round_trip_rate"].rank(pct=True) * 100
+    summary["value_percentile"] = summary["total_value_involved"].rank(pct=True) * 100
+
+    return summary.sort_values("round_trip_rate", ascending=False)
