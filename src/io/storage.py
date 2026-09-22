@@ -95,3 +95,16 @@ def save_history_as_excel(blob_service, history_records, blob_path):
     blob_client = blob_service.get_blob_client(container="gold", blob=blob_path)
     blob_client.upload_blob(buffer, overwrite=True)
     return len(df)
+
+def save_json(blob_service, df, blob_path):
+    """Saves a DataFrame as JSON (records orientation, ISO dates) to blob storage."""
+    payload = df.to_json(orient="records", date_format="iso")
+    blob_client = blob_service.get_blob_client(container="gold", blob=blob_path)
+    blob_client.upload_blob(payload, overwrite=True)
+
+
+def read_json_df(blob_service, blob_path):
+    """Reads a JSON blob back into a DataFrame."""
+    blob_client = blob_service.get_blob_client(container="gold", blob=blob_path)
+    stream = blob_client.download_blob().readall()
+    return pd.read_json(io.BytesIO(stream), orient="records")
