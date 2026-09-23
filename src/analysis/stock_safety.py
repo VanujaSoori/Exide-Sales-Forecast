@@ -16,15 +16,29 @@ def compute_current_stock(analysis_silver: pd.DataFrame) -> pd.DataFrame:
     return current_stock
 
 
-def compute_incoming_stock(purchase_orders_bronze: pd.DataFrame) -> pd.DataFrame:
+def compute_incoming_stock(purchase_orders_bronze: pd.DataFrame, battery_item_list: list) -> pd.DataFrame:
     """
-    Aggregates open purchase order quantities per item + location.
-    """
-    open_orders = purchase_orders_bronze[purchase_orders_bronze["documentType"] == "Order"].copy()
+    Aggregates genuinely outstanding purchase order quantities per item + location,
+    restricted to battery items only.
 
-    incoming_stock = open_orders.groupby(["itemNo", "locationCode"])["qtyToReceive"].sum().reset_index()
+    Outstanding quantity = quantity - quantityReceived. Orders where this is
+    zero or negative are fully received (or corrected) and excluded.
+    """
+    open_orders = purchase_orders_bronze[
+        (purchase_orders_bronze["documentType"] == "Order") &
+        (purchase_orders_bronze["itemNo"].isin(battery_item_list))
+    ].copy()
+
+    open_orders["outstanding_qty"] = open_orders["quantity"] - open_orders["quantityReceived"]
+
+    # Exclude lines that are effectively complete or invalid
+    before_count = len(open_orders)
+    open_orders = open_orders[open_orders["outstanding_qty"] > 0].copy()
+    print(f"Removed {before_count - len(open_orders)} order lines with outstanding_qty <= 0 (already received)")
+
+    incoming_stock = open_orders.groupby(["itemNo", "locationCode"])["outstanding_qty"].sum().reset_index()
     incoming_stock = incoming_stock.rename(columns={
-        "itemNo": "item_no", "locationCode": "location_code", "qtyToReceive": "incoming_stock"
+        "itemNo": "item_no", "locationCode": "location_code", "outstanding_qty": "incoming_stock"
     })
 
     return incoming_stock
